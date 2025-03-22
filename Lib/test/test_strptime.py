@@ -286,10 +286,11 @@ class StrptimeTests(unittest.TestCase):
         with self.assertRaises(ValueError) as e:
             _strptime._strptime_time('', '%D')
         self.assertIs(e.exception.__suppress_context__, True)
-        # additional check for IndexError branch (issue #19545)
+
+        # additional check for trailing % (issue #19545)
         with self.assertRaises(ValueError) as e:
             _strptime._strptime_time('19', '%Y %')
-        self.assertIsNone(e.exception.__context__)
+        self.assertIs(e.exception.__suppress_context__, True)
 
     def test_unconverteddata(self):
         # Check ValueError is raised when there is unconverted data
@@ -591,6 +592,24 @@ class StrptimeTests(unittest.TestCase):
         self.assertTrue(strp_output[0] == self.time_tuple[0] and
                          strp_output[1] == self.time_tuple[1],
                         "handling of percent sign failed")
+
+    def test_lone_percent(self):
+        # Trailing escaped %s should work
+        strptime = _strptime._strptime
+        self.assertEqual(strptime('2000 %', '%Y %%')[0][0], 2000)
+        self.assertEqual(strptime('2000 %%', '%Y %%%%')[0][0], 2000)
+
+        def test(tstr, format):
+            with self.assertRaises(ValueError) as err:
+                strptime(tstr, format)
+            self.assertEqual("'%' is a bad directive in format '{}'".format(format),
+                             str(err.exception))
+
+        # A lone or unescaped trailing % should not
+        test("%", "%")
+        test("2000 %", "%Y %")
+        test("2000 % %", "%Y % %%")
+        test("2000 %%", "%Y %%%")
 
     def test_caseinsensitive(self):
         # Should handle names case-insensitively.
